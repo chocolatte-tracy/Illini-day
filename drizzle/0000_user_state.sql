@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS user_state (
+  user_id TEXT PRIMARY KEY NOT NULL,
+  email TEXT NOT NULL,
+  events_json TEXT NOT NULL DEFAULT '[]',
+  todos_json TEXT NOT NULL DEFAULT '[]',
+  preferences_json TEXT NOT NULL DEFAULT '{}',
+  version INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

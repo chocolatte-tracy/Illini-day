@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#13294b">
+  <meta name="description" content="A local-first UIUC schedule, campus resource finder, and walking-time planner.">
+  <title>Illini Day — UIUC schedule & campus guide</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%2313294b'/%3E%3Cpath d='M16 14h32v9H37v18h11v9H16v-9h11V23H16z' fill='%23ff5f05'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,650&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=20260917.2">
+  <style>.field-help{margin:-4px 0 8px;color:#657386;font-size:11px;line-height:1.45}.task-window{background:#f3f6f9;border-radius:10px;padding:11px;margin:10px 0}.task-window small,.task-window strong{display:block}.task-window small{color:#657386;font-size:9px;letter-spacing:.08em}.task-window strong{font-size:12px;margin-top:4px}.secondary.full{width:100%;margin-top:-7px;border:1px solid #cbd5e2;background:#fff;color:#13294b;border-radius:9px;padding:9px;font-weight:700}.option-box{border:1px solid #d8dfe8;border-radius:10px;padding:10px;margin:10px 0;background:#f8fafc}.weekday-picker{display:flex;gap:5px;flex-wrap:wrap;margin:8px 0}.weekday-picker label{display:flex;align-items:center;gap:3px;background:#fff;border:1px solid #d8dfe8;border-radius:7px;padding:5px 7px;font-size:11px}.suggestion-row{border-top:1px solid #d8e8e2;padding:8px 0}.suggestion-row:first-of-type{border-top:0}.route-note{font-size:10px;color:#526575}.hidden{display:none!important}</style>
+</head>
+<body>
+  <section class="auth-gate" id="authGate" aria-labelledby="authTitle">
+    <div class="auth-card">
+      <span class="brand-mark auth-mark">I</span>
+      <span class="eyebrow">ILLINI DAY ACCOUNT</span>
+      <h1 id="authTitle">Your schedule, on every device.</h1>
+      <p>Sign in to keep your events and tasks private to your account and synced across your phone and computer.</p>
+      <a class="primary auth-button" id="authButton" href="#">Sign in securely</a>
+      <small>Your credentials stay with the secure sign-in provider. Illini Day never receives or stores your password.</small>
+    </div>
+  </section>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Schedule controls">
+      <div class="brand"><span class="brand-mark">I</span><div><strong>Illini Day</strong><small>Campus, in context.</small></div></div>
+      <button class="primary full" id="addEventBtn"><span>＋</span> Add event</button>
+      <button class="secondary full" id="addWeeklyBtn"><span>↻</span> Add weekly event</button>
+      <section class="mini-calendar" aria-label="Mini calendar">
+        <div class="mini-head"><button id="miniPrev" aria-label="Previous month">‹</button><strong id="miniTitle"></strong><button id="miniNext" aria-label="Next month">›</button></div>
+        <div class="mini-weekdays"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+        <div class="mini-grid" id="miniGrid"></div>
+      </section>
+      <section class="filters">
+        <div class="section-label">CALENDARS</div>
+        <label><input type="checkbox" data-filter="Class" checked><i class="dot class"></i> Classes</label>
+        <label><input type="checkbox" data-filter="Study" checked><i class="dot study"></i> Study</label>
+        <label><input type="checkbox" data-filter="Campus" checked><i class="dot campus"></i> Campus life</label>
+        <label><input type="checkbox" data-filter="Food" checked><i class="dot food"></i> Food</label>
+        <label><input type="checkbox" data-filter="Personal" checked><i class="dot personal"></i> Personal</label>
+      </section>
+      <section class="home-card">
+        <span class="home-icon">⌂</span><div><small>HOME BASE</small><strong>Illini Tower</strong><button id="homeMap">Open in Maps ↗</button></div>
+      </section>
+      <div class="privacy-note" id="privacyNote">Private to your account · Cloud sync on</div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="date-controls">
+          <button class="mobile-header-toggle" id="mobileHeaderToggle" type="button" aria-expanded="true" aria-controls="mobileHeaderContent" aria-label="Collapse calendar workspace header"><span aria-hidden="true">⌃</span><span class="mobile-toggle-label">Collapse</span></button>
+          <button class="ghost today-btn" id="todayBtn">Today</button>
+          <div class="seg-nav"><button id="prevPeriod" aria-label="Previous period">‹</button><button id="nextPeriod" aria-label="Next period">›</button></div>
+          <div><h1 id="rangeTitle">September 2026</h1><p id="daySummary"></p></div>
+        </div>
+        <div class="top-actions" id="mobileHeaderContent">
+          <div class="account-chip" id="accountChip" hidden title="Signed-in account"><span class="account-avatar" id="accountAvatar">I</span><div><strong id="accountName">Account</strong><small id="syncStatus">Connecting…</small></div><a href="#" id="accountSignout" aria-label="Sign out" title="Sign out">↪</a></div>
+          <button class="ghost todo-toggle" id="todoToggle">✓ Tasks <span id="todoCount">0</span></button>
+          <button class="ghost" id="resourceBtn">◎ Resources</button>
+          <button class="ghost birthday-btn" id="birthdayBtn" aria-label="Birthday settings" title="Birthday settings">🎂</button>
+          <div class="view-switch" role="group" aria-label="Calendar view"><button data-view="day">Day</button><button data-view="week" class="active">Week</button><button data-view="month">Month</button><button data-view="year">Year</button></div>
+          <button class="assistant-toggle" id="assistantToggle"><span class="spark">✦</span> Ask Alma <span class="kbd">⌘K</span></button>
+        </div>
+      </header>
+
+      <section class="insight-strip" id="insightStrip">
+        <div class="insight-icon">↗</div><div><strong id="insightTitle">A comfortable route today</strong><p id="insightText">Your first class is a 10-minute walk from Illini Tower. Leave by 9:48 AM for a small buffer.</p></div><button id="dismissInsight" aria-label="Dismiss">×</button>
+      </section>
+
+      <div class="calendar-wrap">
+        <div class="calendar" id="calendar" aria-label="Calendar"></div>
+      </div>
+    </main>
+
+    <aside class="assistant-panel" id="assistantPanel" aria-label="Alma campus assistant">
+      <div class="assistant-head"><div><span class="alma-orb">✦</span><div><strong>Alma</strong><small>Campus schedule assistant</small></div></div><button id="closeAssistant" aria-label="Close assistant">×</button></div>
+      <div class="assistant-status"><i></i> Live search · 4 campus sources + official-page time checks</div>
+      <div class="chat" id="chat" aria-live="polite">
+        <div class="message bot"><div class="avatar">✦</div><div class="bubble"><strong>Good afternoon, Tracy.</strong><p>I can answer questions from your synced schedule and tasks, search live UIUC listings, and check results against your calendar.</p><div class="chips"><button>What do I have tomorrow?</button><button>When is my next class?</button><button>Lunch near my next class</button></div></div></div>
+      </div>
+      <form class="chat-form" id="chatForm">
+        <textarea id="chatInput" rows="2" placeholder="Ask about UIUC, or paste a weekly class schedule…" aria-label="Message Alma"></textarea>
+        <button type="submit" aria-label="Send">↑</button>
+      </form>
+      <div class="chat-foot">An event can be added only after its time matches an official detail page or a second official listing. Google Maps links are provided to verify walking routes.</div>
+    </aside>
+
+    <aside class="todo-panel" id="todoPanel" aria-label="Flexible tasks">
+      <div class="assistant-head"><div><span class="todo-orb">✓</span><div><strong>Flexible tasks</strong><small>Plan them before they become urgent</small></div></div><button id="closeTodo" aria-label="Close tasks">×</button></div>
+      <div class="todo-summary"><div><strong id="todoOpenCount">0</strong><span>open</span></div><div><strong id="todoDueSoon">0</strong><span>due soon</span></div><button class="canvas-sync-btn" id="canvasSyncBtn">C Canvas</button><button class="primary" id="addTodoBtn">＋ Add</button></div>
+      <div class="todo-list" id="todoList"></div>
+      <div class="todo-foot">Tasks stay separate from the calendar until you approve a suggested work session.</div>
+    </aside>
+  </div>
+
+  <div class="overlay" id="overlay"></div>
+  <dialog id="eventDialog" class="modal">
+    <form id="eventForm" method="dialog">
+      <div class="modal-head"><div><span class="eyebrow">NEW SCHEDULE ITEM</span><h2 id="eventDialogTitle">Add an event</h2></div><button type="button" class="x" data-close="eventDialog">×</button></div>
+      <label class="field"><span>Event name</span><input name="title" required placeholder="e.g. CS 124 Office Hours"></label>
+      <div class="field-row"><label class="field"><span>Date</span><input type="date" name="date" required></label><label class="field"><span>Type</span><select name="type"><option>Class</option><option>Study</option><option>Campus</option><option>Food</option><option>Personal</option></select></label></div>
+      <div class="field-row"><label class="field"><span>Starts</span><input type="time" name="start" required></label><label class="field"><span>Ends</span><input type="time" name="end" required></label></div>
+      <label class="field"><span>Place</span><input name="place" required list="places" placeholder="Building or address"></label>
+      <datalist id="places"><option>Anywhere</option><option>Illini Tower</option><option>Siebel Center for Computer Science</option><option>Lincoln Hall</option><option>Campus Instructional Facility</option><option>Main Library</option><option>Engineering Library</option><option>Grainger Engineering Library</option><option>Illini Union</option><option>ARC</option><option>Krannert Center</option><option>McKinley Health Center</option></datalist>
+      <label class="field"><span>Quick Look note</span><textarea name="note" rows="3" placeholder="What should future-you know?"></textarea></label>
+      <label class="field"><span>Details link <em>optional</em></span><input type="url" name="url" placeholder="https://…"></label>
+      <div class="option-box hidden" id="repeatOptions"><strong>Repeat weekly</strong><div class="weekday-picker"><label><input type="checkbox" name="repeatDay" value="1">M</label><label><input type="checkbox" name="repeatDay" value="2">T</label><label><input type="checkbox" name="repeatDay" value="3">W</label><label><input type="checkbox" name="repeatDay" value="4">Th</label><label><input type="checkbox" name="repeatDay" value="5">F</label><label><input type="checkbox" name="repeatDay" value="6">Sa</label><label><input type="checkbox" name="repeatDay" value="0">Su</label></div><label class="field"><span>Repeat through</span><input type="date" name="repeatUntil"></label><p class="field-help">Each occurrence is saved locally and checked against your schedule.</p></div>
+      <div class="walk-preview" id="walkPreview"><span>🚶</span><div><strong>Walking time will be checked</strong><p>Against the events before and after this one.</p></div></div>
+      <div class="modal-actions"><button type="button" class="ghost" data-close="eventDialog">Cancel</button><button class="primary" type="submit">Check & add</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="conflictDialog" class="modal conflict-modal">
+    <div class="modal-head"><div><span class="eyebrow warning">SCHEDULE CHECK</span><h2 id="conflictTitle">These events overlap</h2></div><button type="button" class="x" data-close="conflictDialog">×</button></div>
+    <p id="conflictText"></p><div id="conflictCards"></div>
+    <div class="modal-actions conflict-actions"><button class="ghost" id="cancelConflict">Cancel</button><button class="danger-soft" id="replaceConflict">Replace existing</button><button class="primary" id="addAnyway">Add anyway</button></div>
+  </dialog>
+
+  <dialog id="quickDialog" class="modal quick-modal">
+    <div id="quickContent"></div>
+  </dialog>
+
+  <dialog id="mealDialog" class="modal meal-modal">
+    <form id="mealForm" method="dialog" novalidate>
+      <div class="modal-head"><div><span class="eyebrow">PLAN THIS MEAL</span><h2 id="mealRestaurant">Restaurant</h2></div><button type="button" class="x" data-close="mealDialog">×</button></div>
+      <div class="meal-origin" id="mealOrigin"></div>
+      <div class="field-row"><label class="field"><span>Date</span><input type="date" name="date" required></label><label class="field"><span>Starts</span><input type="time" name="start" required></label></div>
+      <label class="field"><span>How long do you want to eat?</span><input type="number" name="duration" min="10" max="240" step="5" value="45"><small>minutes</small></label>
+      <p class="field-help">Nothing is added until the app checks both calendar overlap and walking time from the events around this meal.</p>
+      <div class="form-error" id="mealFormError" role="alert" hidden></div>
+      <div class="modal-actions"><button type="button" class="ghost" data-close="mealDialog">Cancel</button><button class="primary" type="submit">Check & add meal</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="resourceDialog" class="modal resource-modal">
+    <div class="modal-head"><div><span class="eyebrow">CLOSE THE INFORMATION GAP</span><h2>UIUC resources worth knowing</h2></div><button type="button" class="x" data-close="resourceDialog">×</button></div>
+    <div class="resource-list" id="resourceList"></div>
+  </dialog>
+
+  <dialog id="todoDialog" class="modal">
+    <form id="todoForm" method="dialog" novalidate>
+      <div class="modal-head"><div><span class="eyebrow">FLEXIBLE TASK</span><h2 id="todoDialogTitle">Add a task</h2></div><button type="button" class="x" data-close="todoDialog">×</button></div>
+      <label class="field"><span>Task, assignment, or project</span><input name="title" required placeholder="e.g. Finish MATH 241 problem set"></label>
+      <div class="field-row"><label class="field"><span>Type</span><select name="kind"><option>Assignment</option><option>Project</option><option>Exam prep</option><option>Errand</option><option>Personal</option></select></label><label class="field" id="singleDurationField"><span>Time needed <em>optional</em></span><input type="number" name="duration" min="1" max="720" step="1" placeholder="e.g. 31"><small>minutes</small></label></div>
+      <label class="field"><span>Where will you work?</span><input name="place" required list="places" value="Anywhere" placeholder="Anywhere or a specific building"></label>
+      <p class="field-help">Choose Anywhere to stay at the previous event's location. Leave time blank to keep this as a reminder only.</p>
+      <label class="field"><span>How should this task be completed?</span><select name="completionMode"><option value="single">One session</option><option value="split">Split into multiple sessions</option></select></label>
+      <div class="option-box hidden" id="splitOptions"><div class="field-row"><label class="field"><span>Number of sessions</span><input type="number" name="sessionCount" min="2" max="12" value="3"></label><label class="field"><span>Minutes per session</span><input type="number" name="sessionDuration" min="1" max="360" step="1" value="45"></label></div><p class="field-help">The planner keeps at least a 30-minute break between suggested sessions.</p></div>
+      <div class="field-row"><label class="field"><span>Earliest start</span><input type="datetime-local" name="availableFrom" required></label><label class="field"><span>Deadline</span><input type="datetime-local" name="deadline" required></label></div>
+      <p class="field-help">The planner will search only inside this window and never suggest a time in the past.</p>
+      <label class="field"><span>Notes <em>optional</em></span><textarea name="note" rows="3" placeholder="Links, requirements, or what to do first"></textarea></label>
+      <label class="field"><span>Details link <em>optional</em></span><input type="url" name="url" placeholder="https://…"></label>
+      <div class="form-error" id="todoFormError" role="alert" hidden></div>
+      <div class="modal-actions"><button type="button" class="ghost" data-close="todoDialog">Cancel</button><button class="primary" id="todoSubmit" type="submit">Save task</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="todoDetailsDialog" class="modal task-detail-modal">
+    <div id="todoDetailsContent"></div>
+  </dialog>
+
+  <dialog id="canvasDialog" class="modal canvas-modal">
+    <form id="canvasForm" method="dialog" novalidate>
+      <div class="modal-head"><div><span class="eyebrow">CANVAS CALENDAR IMPORT</span><h2>Import into Canvas Tasks</h2></div><button type="button" class="x" data-close="canvasDialog">×</button></div>
+      <p class="canvas-explainer">No Personal Access Token is needed. Illini Day first puts every feed item in a separate Canvas Tasks review list. Nothing is added to your calendar until you choose individual items, select several, or select all.</p>
+      <label class="field"><span>Canvas Calendar Feed URL</span><input type="url" name="feedUrl" autocomplete="off" required placeholder="https://canvas.illinois.edu/feeds/calendars/user_…ics"></label>
+      <div class="canvas-feed-help"><strong>Where to find it</strong><ol><li>Open Canvas Calendar.</li><li>In the calendar sidebar, choose <em>Calendar Feed</em>.</li><li>Copy the HTTPS feed URL and paste it here.</li></ol><p>Illini Day uses the URL only for this sync, does not save it, and never displays the feed credential.</p></div>
+      <div class="form-error" id="canvasFormError" role="alert" hidden></div>
+      <div class="canvas-progress" id="canvasProgress" hidden><span class="live-loader"></span> Reading your Canvas calendar feed…</div>
+      <div class="modal-actions"><button type="button" class="ghost" data-close="canvasDialog">Cancel</button><button class="primary" id="canvasSubmit" type="submit">Import to Tasks</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="canvasItemDialog" class="modal">
+    <form id="canvasItemForm" method="dialog" novalidate>
+      <div class="modal-head"><div><span class="eyebrow">EDIT CANVAS ITEM</span><h2>Adjust before adding</h2></div><button type="button" class="x" data-close="canvasItemDialog">×</button></div>
+      <p class="canvas-explainer">This changes the copy in Illini Day only. It does not edit the original item in Canvas.</p>
+      <label class="field"><span>Name</span><input name="title" required></label>
+      <label class="field"><span>Scheduling method</span><select name="scheduleMode"><option value="fixed">Fixed calendar time</option><option value="flexible">Flexible task window</option></select></label>
+      <div id="canvasFixedFields">
+        <div class="field-row"><label class="field"><span>Date</span><input type="date" name="date"></label><label class="field"><span>Event type</span><select name="type"><option>Class</option><option>Study</option><option>Campus</option><option>Food</option><option>Personal</option></select></label></div>
+        <div class="field-row"><label class="field"><span>Starts</span><input type="time" name="start"></label><label class="field"><span>Ends</span><input type="time" name="end"></label></div>
+      </div>
+      <div id="canvasFlexibleFields" class="option-box hidden">
+        <div class="field-row"><label class="field"><span>Task type</span><select name="kind"><option>Assignment</option><option>Project</option><option>Exam preparation</option><option>Errand</option><option>Personal</option></select></label><label class="field"><span>Time needed (minutes)</span><input type="number" name="duration" min="1" max="720" step="1"></label></div>
+        <div class="field-row"><label class="field"><span>Earliest start</span><input type="datetime-local" name="availableFrom"></label><label class="field"><span>Deadline</span><input type="datetime-local" name="deadline"></label></div>
+        <p class="form-hint">Illini Day will recommend route-safe free times. Nothing is added until you confirm a suggestion.</p>
+      </div>
+      <label class="field"><span>Location</span><input name="place" value="Anywhere" readonly aria-readonly="true"><small>Canvas tasks always use Anywhere.</small></label>
+      <label class="field"><span>Notes</span><textarea name="note" rows="4"></textarea></label>
+      <label class="field"><span>Details link <em>optional</em></span><input type="url" name="url" placeholder="https://…"></label>
+      <div class="form-error" id="canvasItemFormError" role="alert" hidden></div>
+      <div class="modal-actions"><button type="button" class="ghost" data-close="canvasItemDialog">Cancel</button><button class="primary" type="submit">Save changes</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="sleepDialog" class="modal sleep-modal">
+    <div class="sleep-icon" aria-hidden="true">☾</div>
+    <button type="button" class="x sleep-close" data-close="sleepDialog" aria-label="Close sleep reminder">×</button>
+    <span class="eyebrow">LATE-NIGHT CHECK-IN</span>
+    <h2>Time to call it a night</h2>
+    <p>It’s <strong id="sleepNow"></strong> in Champaign. Close the planner, put tomorrow down for a moment, and get some sleep.</p>
+    <div class="sleep-target"><small>FOR A FULL 8 HOURS</small><strong>Earliest wake-up: <span id="sleepWake"></span></strong></div>
+    <p class="sleep-note">Sleep belongs on the schedule too.</p>
+    <div class="modal-actions"><button class="primary" type="button" data-close="sleepDialog">Got it — bedtime</button></div>
+  </dialog>
+
+  <dialog id="migrationDialog" class="modal migration-modal">
+    <div class="migration-icon">↥</div>
+    <span class="eyebrow">ONE-TIME IMPORT</span>
+    <h2>Keep this device’s existing schedule?</h2>
+    <p>We found events or tasks saved in this browser. Import them into your account so they appear on your other devices.</p>
+    <div class="modal-actions"><button class="ghost" id="startFreshBtn" type="button">Start fresh</button><button class="primary" id="importLocalBtn" type="button">Import this schedule</button></div>
+  </dialog>
+
+  <dialog id="celebrationDialog" class="modal celebration-modal">
+    <button type="button" class="x" data-close="celebrationDialog" aria-label="Close celebration">×</button>
+    <div class="celebration-burst" aria-hidden="true">✓</div>
+    <span class="eyebrow">TODAY COMPLETE</span>
+    <h2>Everything for today is done!</h2>
+    <p>Nice work. You cleared every task on today’s list—take a breath and enjoy the progress you made.</p>
+    <div class="modal-actions"><button class="primary" type="button" data-close="celebrationDialog">Celebrate</button></div>
+  </dialog>
+
+  <dialog id="linkChooserDialog" class="modal link-chooser-modal">
+    <button type="button" class="x" data-close="linkChooserDialog" aria-label="Close link chooser">×</button>
+    <span class="eyebrow">DETAILS</span>
+    <h2 id="linkChooserTitle">Choose a link</h2>
+    <p>More than one link was found in the notes. Choose where you want to go.</p>
+    <div id="linkChooserList" class="link-choice-list"></div>
+    <div class="modal-actions"><button class="ghost" type="button" data-close="linkChooserDialog">Cancel</button></div>
+  </dialog>
+
+  <dialog id="birthdayDialog" class="modal birthday-modal">
+    <form id="birthdayForm" novalidate>
+      <div class="modal-head"><div><span class="eyebrow">PERSONAL CALENDAR</span><h2>Your birthday</h2></div><button type="button" class="x" data-close="birthdayDialog">×</button></div>
+      <p id="birthdayStatus">Add your date of birth to mark your birthday every year.</p>
+      <label class="field"><span>Date of birth</span><input type="date" name="birthday" required></label>
+      <p class="field-help">Your birthday is stored with your private Illini Day account preferences.</p>
+      <div class="modal-actions"><button class="danger-soft" id="removeBirthday" type="button">Remove</button><button class="ghost" type="button" data-close="birthdayDialog">Cancel</button><button class="primary" type="submit">Save birthday</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="birthdayCelebrationDialog" class="modal birthday-celebration-modal">
+    <button type="button" class="x" data-close="birthdayCelebrationDialog" aria-label="Close birthday message">×</button>
+    <div class="birthday-cake" aria-hidden="true">🎂</div>
+    <span class="eyebrow">YOUR DAY</span>
+    <h2>Happy <span id="birthdayAge"></span> Birthday!</h2>
+    <p>Hope your day brings a little extra joy alongside everything on your schedule.</p>
+    <div class="modal-actions"><button class="primary" type="button" data-close="birthdayCelebrationDialog">Thank you!</button></div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status"></div>
+  <script src="config.js?v=20260918.3"></script>
+  <script src="core.js?v=20260918.3"></script>
+  <script src="app.js?v=20260918.3"></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#13294b">
+  <title>Sign in — Illini Day</title>
+  <style>body{font-family:system-ui,-apple-system,sans-serif;background:#f3f5f8;color:#13294b;display:grid;min-height:100vh;place-items:center;margin:0}.card{background:#fff;border:1px solid #dbe2ea;border-radius:18px;box-shadow:0 20px 60px #13294b20;padding:30px;max-width:420px;text-align:center}.mark{display:grid;place-items:center;width:48px;height:48px;margin:0 auto 14px;border-radius:13px;background:#13294b;color:#ff5f05;font-size:30px;font-weight:900}.error{color:#9b2c2c}button{border:0;border-radius:10px;background:#ff5f05;color:#fff;padding:11px 16px;font-weight:800;cursor:pointer}</style>
+</head>
+<body>
+  <main class="card"><div class="mark">I</div><h1>Connecting Illini Day</h1><p id="status">Confirming your secure account…</p><button id="retry" hidden>Try again</button></main>
+  <script>
+    const allowed='https://chocolatte-tracy.github.io',requested=new URLSearchParams(location.search).get('origin'),target=requested===allowed?requested:allowed,status=document.querySelector('#status'),retry=document.querySelector('#retry');
+    async function exchange(){retry.hidden=true;status.className='';status.textContent='Confirming your secure account…';try{const response=await fetch('/api/auth/exchange',{method:'POST',headers:{'content-type':'application/json'}});if(response.status===401){location.href=`/signin-with-chatgpt?return_to=${encodeURIComponent(`/auth-bridge.html?origin=${target}`)}`;return}const data=await response.json();if(!response.ok)throw new Error(data.error||'Sign-in failed');if(!window.opener)throw new Error('Return to the GitHub Pages tab and try again.');window.opener.postMessage({type:'illini-auth',token:data.token,user:data.user},target);status.textContent='Signed in. You can close this window.';setTimeout(()=>window.close(),500)}catch(error){status.className='error';status.textContent=error.message;retry.hidden=false}}
+    retry.onclick=exchange;exchange();
+  </script>
+</body>
+</html>
