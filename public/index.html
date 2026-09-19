@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,650&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260919.1">
+  <link rel="stylesheet" href="styles.css?v=20260919.2">
   <style>.field-help{margin:-4px 0 8px;color:#657386;font-size:11px;line-height:1.45}.task-window{background:#f3f6f9;border-radius:10px;padding:11px;margin:10px 0}.task-window small,.task-window strong{display:block}.task-window small{color:#657386;font-size:9px;letter-spacing:.08em}.task-window strong{font-size:12px;margin-top:4px}.secondary.full{width:100%;margin-top:-7px;border:1px solid #cbd5e2;background:#fff;color:#13294b;border-radius:9px;padding:9px;font-weight:700}.option-box{border:1px solid #d8dfe8;border-radius:10px;padding:10px;margin:10px 0;background:#f8fafc}.weekday-picker{display:flex;gap:5px;flex-wrap:wrap;margin:8px 0}.weekday-picker label{display:flex;align-items:center;gap:3px;background:#fff;border:1px solid #d8dfe8;border-radius:7px;padding:5px 7px;font-size:11px}.suggestion-row{border-top:1px solid #d8e8e2;padding:8px 0}.suggestion-row:first-of-type{border-top:0}.route-note{font-size:10px;color:#526575}.hidden{display:none!important}</style>
 </head>
 <body>
@@ -24,6 +24,17 @@
       <small>Your credentials stay with the secure sign-in provider. Illini Day never receives or stores your password.</small>
     </div>
   </section>
+  <dialog id="welcomeDialog" class="modal welcome-modal">
+    <div class="welcome-mark">I</div>
+    <span class="eyebrow">WELCOME TO ILLINI DAY</span>
+    <h2>Start with a calendar that fits you.</h2>
+    <p>Try a realistic UIUC demo schedule, or start with a completely empty calendar. You can change everything later.</p>
+    <div class="welcome-options">
+      <button class="welcome-option" id="startDemoBtn" type="button"><strong>Use demo schedule</strong><span>Explore walking routes, Alma, and calendar views with sample events.</span></button>
+      <button class="welcome-option" id="startEmptyBtn" type="button"><strong>Start empty</strong><span>Build your own schedule from scratch and keep it saved on this device.</span></button>
+    </div>
+    <small class="welcome-note">No account is required. Sign in later if you want cloud sync across devices.</small>
+  </dialog>
   <div class="app-shell">
     <aside class="sidebar" aria-label="Schedule controls">
       <div class="brand"><span class="brand-mark">I</span><div><strong>Illini Day</strong><small>Campus, in context.</small></div></div>
@@ -61,7 +72,8 @@
           <button class="ghost todo-toggle" id="todoToggle">✓ Tasks <span id="todoCount">0</span></button>
           <button class="ghost" id="resourceBtn">◎ Resources</button>
           <button class="ghost birthday-btn" id="birthdayBtn" aria-label="Birthday settings" title="Birthday settings">🎂</button>
-          <div class="view-switch" role="group" aria-label="Calendar view"><button data-view="day">Day</button><button data-view="week" class="active">Week</button><button data-view="month">Month</button><button data-view="year">Year</button></div>
+          <button class="ghost" id="dataBtn">⇅ Data</button>
+          <div class="view-switch" role="group" aria-label="Calendar view"><button data-view="agenda">Agenda</button><button data-view="day">Day</button><button data-view="week" class="active">Week</button><button data-view="month">Month</button><button data-view="year">Year</button></div>
           <button class="assistant-toggle" id="assistantToggle"><span class="spark">✦</span> Ask Alma <span class="kbd">⌘K</span></button>
         </div>
       </header>
@@ -79,7 +91,7 @@
       <div class="assistant-head"><div><span class="alma-orb">✦</span><div><strong>Alma</strong><small>Campus schedule assistant</small></div></div><button id="closeAssistant" aria-label="Close assistant">×</button></div>
       <div class="assistant-status"><i></i> Live search · 4 campus sources + official-page time checks</div>
       <div class="chat" id="chat" aria-live="polite">
-        <div class="message bot"><div class="avatar">✦</div><div class="bubble"><strong>Good afternoon, Tracy.</strong><p>I can answer questions from your synced schedule and tasks, search live UIUC listings, and check results against your calendar.</p><div class="chips"><button>What do I have tomorrow?</button><button>When is my next class?</button><button>Lunch near my next class</button></div></div></div>
+        <div class="message bot"><div class="avatar">✦</div><div class="bubble"><strong>Good afternoon.</strong><p>I can answer questions from your synced schedule and tasks, search live UIUC listings, and check results against your calendar.</p><div class="chips"><button>What do I have tomorrow?</button><button>When is my next class?</button><button>Lunch near my next class</button></div></div></div>
       </div>
       <form class="chat-form" id="chatForm">
         <textarea id="chatInput" rows="2" placeholder="Ask about UIUC, or paste a weekly class schedule…" aria-label="Message Alma"></textarea>
@@ -216,6 +228,18 @@
     <div class="modal-actions"><button class="ghost" id="startFreshBtn" type="button">Start fresh</button><button class="primary" id="importLocalBtn" type="button">Import this schedule</button></div>
   </dialog>
 
+  <dialog id="dataDialog" class="modal data-modal">
+    <div class="modal-head"><div><span class="eyebrow">YOUR DATA</span><h2>Take your schedule with you.</h2></div><button type="button" class="x" data-close="dataDialog">×</button></div>
+    <p class="data-copy">Export a backup for this device, move your calendar to another browser, or import a standard .ics calendar file.</p>
+    <div class="data-actions">
+      <button class="data-action" id="exportJsonBtn" type="button"><strong>Export backup</strong><span>Illini Day JSON with events, tasks, and preferences.</span></button>
+      <button class="data-action" id="exportIcsBtn" type="button"><strong>Export calendar</strong><span>Download your schedule as a standard .ics file.</span></button>
+      <button class="data-action" id="importDataBtn" type="button"><strong>Import data</strong><span>Restore JSON or bring in an .ics calendar.</span></button>
+      <input id="importDataFile" type="file" accept=".json,.ics,application/json,text/calendar" hidden>
+    </div>
+    <div class="data-danger"><strong>Reset this device</strong><span>Remove local events, tasks, and preferences. Cloud data is not changed.</span><button class="danger-soft" id="clearLocalBtn" type="button">Clear local data</button></div>
+  </dialog>
+
   <dialog id="celebrationDialog" class="modal celebration-modal">
     <button type="button" class="x" data-close="celebrationDialog" aria-label="Close celebration">×</button>
     <div class="celebration-burst" aria-hidden="true">✓</div>
@@ -254,8 +278,8 @@
   </dialog>
 
   <div class="toast" id="toast" role="status"></div>
-  <script src="config.js?v=20260919.1"></script>
-  <script src="core.js?v=20260919.1"></script>
-  <script src="app.js?v=20260919.1"></script>
+  <script src="config.js?v=20260919.2"></script>
+  <script src="core.js?v=20260919.2"></script>
+  <script src="app.js?v=20260919.2"></script>
 </body>
 </html>
