@@ -58,14 +58,17 @@ function clearLocalData(){if(!window.confirm('Clear this device local events, ta
 function maybeShowWelcome(){if(currentAccount||hadDeviceDataAtBoot||localStorage.getItem(WELCOME_KEY))return;const dialog=$('#welcomeDialog');if(dialog&&!dialog.open)dialog.showModal()}
 function chooseWelcome(mode){demoMode=mode==='demo';localStorage.setItem(DEMO_MODE_KEY,demoMode?'1':'0');localStorage.setItem(WELCOME_KEY,'1');if(!demoMode){events=[];todos=[]}$('#welcomeDialog').close();setPrivacyStatus();render();toast(demoMode?'Demo schedule loaded':'Empty calendar ready')}
 function chooseLocalImport(){return new Promise(resolve=>{const dialog=$('#migrationDialog'),importBtn=$('#importLocalBtn'),freshBtn=$('#startFreshBtn');importBtn.onclick=()=>{dialog.close();resolve(true)};freshBtn.onclick=()=>{dialog.close();resolve(false)};dialog.showModal()})}
-function continueWithoutAccount(message='Saved on this device · Sign in for cloud sync'){currentAccount=null;cloudReady=false;$('#authGate').hidden=true;$('#accountChip').hidden=true;setPrivacyStatus();setSyncStatus('Saved on this device');setView(view);checkSleepReminder();checkBirthday();maybeShowWelcome()}
+function setAccountUi(){const signIn=$('#guestSignInBtn');if(signIn)signIn.hidden=!!currentAccount;const chip=$('#accountChip');if(chip)chip.hidden=!currentAccount}
+function openSignInScreen(event){event?.preventDefault();const gate=$('#authGate');if(!gate)return;gate.hidden=false;$('#authButton')?.focus()}
+function closeSignInScreen(){const gate=$('#authGate');if(gate)gate.hidden=true}
+function continueWithoutAccount(message='Saved on this device · Sign in for cloud sync'){currentAccount=null;cloudReady=false;closeSignInScreen();setAccountUi();setPrivacyStatus();setSyncStatus('Saved on this device');setView(view);checkSleepReminder();checkBirthday();maybeShowWelcome()}
 async function bootstrapAccount(){
   try{
     const accountResponse=await apiFetch('/api/account',{cache:'no-store'});
     if(accountResponse.status===401){if(API_BASE)localStorage.removeItem(AUTH_TOKEN_KEY);continueWithoutAccount();return}
     if(!accountResponse.ok)throw new Error('Account service unavailable');
     currentAccount=(await accountResponse.json()).user;
-    $('#accountName').textContent=currentAccount.email;$('#accountAvatar').textContent=(currentAccount.email[0]||'I').toUpperCase();$('#accountChip').hidden=false;
+    $('#accountName').textContent=currentAccount.email;$('#accountAvatar').textContent=(currentAccount.email[0]||'I').toUpperCase();setAccountUi();
     const stateResponse=await apiFetch('/api/state',{cache:'no-store'});if(!stateResponse.ok)throw new Error('Schedule sync unavailable');const state=await stateResponse.json();
     const previousUser=localStorage.getItem('illini-last-user-id');
     if(state.exists){events=Array.isArray(state.events)?state.events:[];todos=Array.isArray(state.todos)?state.todos:[];if(['agenda','day','week','month','year'].includes(state.preferences?.view))view=state.preferences.view;if(/^\d{4}-\d{2}-\d{2}$/.test(state.preferences?.focus||'')){focusDate=atNoon(state.preferences.focus);miniDate=new Date(focusDate)}birthday=/^\d{4}-\d{2}-\d{2}$/.test(state.preferences?.birthday||'')?state.preferences.birthday:''}
@@ -79,6 +82,9 @@ async function bootstrapAccount(){
 function beginAccountSignIn(event){event?.preventDefault();if(!API_BASE){location.href='/signin-with-chatgpt?return_to=/';return}const bridge=`${API_BASE}/auth-bridge.html?origin=${encodeURIComponent(location.origin)}`,popup=window.open(bridge,'illini-day-sign-in','popup,width=520,height=680');if(!popup)toast('Allow the sign-in pop-up, then try again.')}
 window.addEventListener('message',event=>{if(!API_BASE)return;let backendOrigin;try{backendOrigin=new URL(API_BASE).origin}catch{return}if(event.origin!==backendOrigin||event.data?.type!=='illini-auth'||typeof event.data.token!=='string'||event.data.token.length<32)return;localStorage.setItem(AUTH_TOKEN_KEY,event.data.token);location.reload()});
 $('#authButton').onclick=beginAccountSignIn;
+$('#guestSignInBtn').onclick=openSignInScreen;
+$('#authClose').onclick=closeSignInScreen;
+$('#authContinue').onclick=continueWithoutAccount;
 $('#accountSignout').onclick=async event=>{event.preventDefault();if(!API_BASE){location.href='/signout-with-chatgpt?return_to=/';return}try{await apiFetch('/api/auth/logout',{method:'POST'})}catch{}localStorage.removeItem(AUTH_TOKEN_KEY);location.reload()};
 function eventDate(e){return atNoon(e.date)}
 function filtered(es){return es.filter(e=>filters.has(e.type))}
