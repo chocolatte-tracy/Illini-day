@@ -36,6 +36,11 @@ xcrun "$packager" "$extension_dir" \
   --project-location "$output_dir" \
   --app-name "Illini Day Canvas Reader" \
   --bundle-identifier "com.chocolatte-tracy.illiniday.canvasreader" \
-  --swift
+  --swift \
+  --macos-only \
+  --copy-resources \
+  --no-prompt \
+  --no-open \
+  --force
 
 echo "Safari project generated at $output_dir"
