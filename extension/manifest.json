@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Illini Day Canvas Reader",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Read the visible Canvas Modules or Announcements page and send a review preview to Illini Day.",
   "permissions": ["activeTab", "tabs"],
   "host_permissions": [

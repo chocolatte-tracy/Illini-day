@@ -35,7 +35,9 @@
 
   function pageArea() {
     const path = location.pathname.toLowerCase();
-    return /announcements|discussion_topics/.test(path) ? 'Announcement' : 'Module';
+    if (/\/announcements(?:\/|$)|\/discussion_topics(?:\/|$)/.test(path)) return 'Announcement';
+    if (/\/modules(?:\/|$)/.test(path)) return 'Module';
+    throw new Error('Open a Canvas Modules or Announcements page first.');
   }
 
   function courseName() {
@@ -49,7 +51,22 @@
   }
 
   function moduleName(row, fallback) {
-    return clean(row.querySelector('.ig-header-title, .context_module_item_context, [data-testid*="module"] h2, h2')?.textContent) || fallback || '';
+    const parent = row.closest('.context_module');
+    return clean(row.querySelector('.context_module_item_context')?.textContent)
+      || clean(parent?.querySelector('.ig-header-title, [data-testid*="module"] h2, h2')?.textContent)
+      || fallback || '';
+  }
+
+  function isActionable(title, note, url) {
+    return /assignments|quizzes|discussion_topics|announcements|modules\/items/i.test(url)
+      || /(assignment|project|exam|midterm|final|quiz|test|due|deadline|submit|presentation|reminder|important|注意|截止|考试|作业)/i.test(`${title} ${note}`);
+  }
+
+  function itemKind(title, note, url) {
+    const text = `${title} ${note} ${url}`;
+    if (/exam|midterm|final|quiz|test|考试/i.test(text)) return 'Exam preparation';
+    if (/project|presentation/i.test(text)) return 'Project';
+    return 'Assignment';
   }
 
   function rowCandidates(main) {
@@ -69,11 +86,11 @@
       const title = clean(row.querySelector('.ig-title, .ig-title a, .discussion-title, h3, h4, [data-testid*="title"]')?.textContent || anchor?.textContent || row.textContent).slice(0, 240);
       if (!title || /^(modules?|announcements?)$/i.test(title)) return;
       const note = clean(row.textContent).slice(0, 1000), url = absoluteUrl(anchor?.getAttribute('href') || location.href);
-      items.push({ sourceId: `browser:${course || 'canvas'}:${moduleName(row, fallbackModule)}:${url || title}`.replace(/[^a-z0-9:_-]+/gi, '-').slice(0, 220), title, course, module: moduleName(row, fallbackModule), note, deadline: parseDeadline(note), url, canvasArea: area });
+      items.push({ sourceId: `browser:${course || 'canvas'}:${moduleName(row, fallbackModule)}:${url || title}`.replace(/[^a-z0-9:_-]+/gi, '-').slice(0, 220), title, course, module: moduleName(row, fallbackModule), note, deadline: parseDeadline(note), url, canvasArea: area, kind: itemKind(title, note, url), suggested: isActionable(title, note, url) });
     });
     if (!items.length) {
       const title = pageTitle(), note = clean(main.textContent).slice(0, 1000);
-      if (title || note) items.push({ sourceId: `browser:${course || 'canvas'}:${location.pathname}`, title: title || `${area} page`, course, module: fallbackModule, note, deadline: parseDeadline(note), url: location.href, canvasArea: area });
+      if (title || note) items.push({ sourceId: `browser:${course || 'canvas'}:${location.pathname}`, title: title || `${area} page`, course, module: fallbackModule, note, deadline: parseDeadline(note), url: location.href, canvasArea: area, kind: itemKind(title, note, location.href), suggested: isActionable(title, note, location.href) });
     }
     const unique = [...new Map(items.map(item => [item.sourceId, item])).values()];
     return { url: location.href, title: pageTitle(), area, course, module: fallbackModule, items: unique };

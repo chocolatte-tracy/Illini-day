@@ -96,8 +96,23 @@ globalThis.fetch = async input => {
 
 const worker = (await import(pathToFileURL(new URL("./dist/server/index.js", import.meta.url).pathname))).default;
 class FakeD1 {
-  constructor(){this.rows=new Map();this.sessions=new Map()}
-  prepare(sql){const db=this,normalized=sql.replace(/\s+/g," ").trim().toLowerCase();return {args:[],bind(...args){this.args=args;return this},async first(){if(normalized.includes("from auth_session")){const row=db.sessions.get(this.args[0]);return row&&row.expires_at>Number(this.args[1])?row:null}return db.rows.get(this.args[0])||null},async run(){if(normalized.startsWith("insert or replace into auth_session")){const [token_hash,user_id,email,expires_at]=this.args;db.sessions.set(token_hash,{token_hash,user_id,email,expires_at});return {success:true,meta:{changes:1}}}if(normalized.startsWith("delete from auth_session where expires_at")){for(const [key,row] of db.sessions)if(row.expires_at<=Number(this.args[0]))db.sessions.delete(key);return {success:true,meta:{changes:1}}}if(normalized.startsWith("delete from auth_session where token_hash")){db.sessions.delete(this.args[0]);return {success:true,meta:{changes:1}}}const [id,email,events_json,todos_json,preferences_json]=this.args,old=db.rows.get(id),version=(old?.version||0)+1,updated_at=new Date().toISOString();db.rows.set(id,{user_id:id,email,events_json,todos_json,preferences_json,version,updated_at});return {success:true,meta:{changes:1}}}}}
+  constructor(){this.rows=new Map();this.sessions=new Map();this.bridges=new Map()}
+  prepare(sql){
+    const db=this,normalized=sql.replace(/\s+/g," ").trim().toLowerCase();
+    return {args:[],bind(...args){this.args=args;return this},async first(){
+      if(normalized.includes("from auth_session")){const row=db.sessions.get(this.args[0]);return row&&row.expires_at>Number(this.args[1])?row:null}
+      if(normalized.includes("from canvas_bridge")){const row=db.bridges.get(this.args[0]);return row&&row.expires_at>Number(this.args[1])?row:null}
+      return db.rows.get(this.args[0])||null
+    },async run(){
+      if(normalized.startsWith("insert or replace into auth_session")){const [token_hash,user_id,email,expires_at]=this.args;db.sessions.set(token_hash,{token_hash,user_id,email,expires_at});return {success:true,meta:{changes:1}}}
+      if(normalized.startsWith("delete from auth_session where expires_at")){for(const [key,row] of db.sessions)if(row.expires_at<=Number(this.args[0]))db.sessions.delete(key);return {success:true,meta:{changes:1}}}
+      if(normalized.startsWith("delete from auth_session where token_hash")){db.sessions.delete(this.args[0]);return {success:true,meta:{changes:1}}}
+      if(normalized.startsWith("insert into canvas_bridge")){const [code_hash,user_id,email,expires_at]=this.args;db.bridges.set(code_hash,{code_hash,user_id,email,expires_at});return {success:true,meta:{changes:1}}}
+      if(normalized.startsWith("delete from canvas_bridge where expires_at")){for(const [key,row] of db.bridges)if(row.expires_at<=Number(this.args[0]))db.bridges.delete(key);return {success:true,meta:{changes:1}}}
+      if(normalized.startsWith("delete from canvas_bridge where code_hash")){db.bridges.delete(this.args[0]);return {success:true,meta:{changes:1}}}
+      const [id,email,events_json,todos_json,preferences_json]=this.args,old=db.rows.get(id),version=(old?.version||0)+1,updated_at=new Date().toISOString();db.rows.set(id,{user_id:id,email,events_json,todos_json,preferences_json,version,updated_at});return {success:true,meta:{changes:1}}
+    }}
+  }
 }
 const authHeaders=(id,email)=>({"oai-authenticated-user-id":id,"oai-authenticated-user-email":email});
 async function api(query, date = todayDate, origin = "Illini Tower") {
@@ -107,7 +122,7 @@ async function api(query, date = todayDate, origin = "Illini Tower") {
 }
 
 const home = await worker.fetch(new Request("https://example.test/"), {}, {});
-assert.equal(home.status, 200); assert.match(await home.text(), /Illini Day/);
+assert.equal(home.status, 200); assert.match(await home.text(), /Illini Day/); assert.equal(home.headers.get("x-content-type-options"), "nosniff");
 const appAsset = await worker.fetch(new Request("https://example.test/app.js?v=20260916.1"), {}, {});
 assert.equal(appAsset.status, 200); assert.match(appAsset.headers.get("cache-control"), /no-store/);
 const today = await api("events today");
@@ -130,14 +145,23 @@ const anonymousAccount=await worker.fetch(new Request("https://example.test/api/
 const account=await worker.fetch(new Request("https://example.test/api/account",{headers:authHeaders("user-a","a@example.com")}),env,{});assert.equal(account.status,200);assert.equal((await account.json()).user.email,"a@example.com");assert.match(account.headers.get("cache-control"),/no-store/);
 const pagesOrigin="https://chocolatte-tracy.github.io";
 const preflight=await worker.fetch(new Request("https://example.test/api/account",{method:"OPTIONS",headers:{origin:pagesOrigin,"access-control-request-method":"GET","access-control-request-headers":"authorization"}}),env,{});assert.equal(preflight.status,204);assert.equal(preflight.headers.get("access-control-allow-origin"),pagesOrigin);
+const extensionOrigin="chrome-extension://test-extension";
+const extensionPreflight=await worker.fetch(new Request("https://example.test/api/canvas/page-import",{method:"OPTIONS",headers:{origin:extensionOrigin,"access-control-request-method":"POST","access-control-request-headers":"content-type"}}),env,{});assert.equal(extensionPreflight.status,204);assert.equal(extensionPreflight.headers.get("access-control-allow-origin"),extensionOrigin);
 const deniedPreflight=await worker.fetch(new Request("https://example.test/api/account",{method:"OPTIONS",headers:{origin:"https://attacker.example","access-control-request-method":"GET"}}),env,{});assert.equal(deniedPreflight.status,403);assert.equal(deniedPreflight.headers.get("access-control-allow-origin"),null);
 const exchange=await worker.fetch(new Request("https://example.test/api/auth/exchange",{method:"POST",headers:{...authHeaders("user-a","a@example.com"),origin:pagesOrigin}}),env,{}),exchangePayload=await exchange.json();assert.equal(exchange.status,200);assert.equal(exchange.headers.get("access-control-allow-origin"),pagesOrigin);assert.ok(exchangePayload.token.length>=32);
 const bearerHeaders={authorization:`Bearer ${exchangePayload.token}`,origin:pagesOrigin};
 const bearerAccount=await worker.fetch(new Request("https://example.test/api/account",{headers:bearerHeaders}),env,{});assert.equal(bearerAccount.status,200);assert.equal((await bearerAccount.json()).user.id,"user-a");
+const bridgeStart=await worker.fetch(new Request("https://example.test/api/canvas/bridge/start",{method:"POST",headers:{...authHeaders("user-a","a@example.com"),origin:pagesOrigin,"content-type":"application/json"},body:"{}"}),env,{}),bridgePayload=await bridgeStart.json();assert.equal(bridgeStart.status,200);assert.ok(bridgePayload.code.length>=32);assert.ok(bridgePayload.expiresAt>Date.now());
+const browserPage={url:"https://canvas.illinois.edu/courses/241/modules",title:"Week 5",area:"Module",course:"MATH 241",module:"Week 5",items:[{sourceId:"course-241-module-5-item-1",title:"Review chapter 8 before quiz",module:"Week 5",note:"<strong>Teacher reminder:</strong> quiz Friday",deadline:"2026-10-03T23:59",url:"https://canvas.illinois.edu/courses/241/modules/items/1"}]};
+const pageImport=await worker.fetch(new Request("https://example.test/api/canvas/page-import",{method:"POST",headers:{origin:extensionOrigin,"content-type":"application/json"},body:JSON.stringify({code:bridgePayload.code,page:browserPage})}),env,{}),pagePayload=await pageImport.json();assert.equal(pageImport.status,200);assert.equal(pageImport.headers.get("access-control-allow-origin"),extensionOrigin);assert.equal(pagePayload.source,"Canvas browser page");assert.equal(pagePayload.items[0].canvasArea,"Module");assert.equal(pagePayload.items[0].deadline,"2026-10-03T23:59");assert.doesNotMatch(pagePayload.items[0].note,/<strong>/);assert.equal(pagePayload.items[0].course,"MATH 241");
+const reusedBridge=await worker.fetch(new Request("https://example.test/api/canvas/page-import",{method:"POST",headers:{origin:extensionOrigin,"content-type":"application/json"},body:JSON.stringify({code:bridgePayload.code,page:browserPage})}),env,{});assert.equal(reusedBridge.status,401);
+const invalidBridgeStart=await worker.fetch(new Request("https://example.test/api/canvas/bridge/start",{method:"POST",headers:authHeaders("user-a","a@example.com"),body:"{}"}),env,{}),invalidBridgePayload=await invalidBridgeStart.json();assert.equal(invalidBridgeStart.status,200);
+const invalidPage=await worker.fetch(new Request("https://example.test/api/canvas/page-import",{method:"POST",headers:{origin:extensionOrigin,"content-type":"application/json"},body:JSON.stringify({code:invalidBridgePayload.code,page:{url:"https://evil.example/not-canvas",items:[{title:"Fake task"}]}})}),env,{});assert.equal(invalidPage.status,400);
 const anonymousState=await worker.fetch(new Request("https://example.test/api/state"),env,{});assert.equal(anonymousState.status,401);
 const initialA=await worker.fetch(new Request("https://example.test/api/state",{headers:authHeaders("user-a","a@example.com")}),env,{});assert.equal((await initialA.json()).exists,false);
 const sampleState={events:[{id:"private-a",title:"A only"}],todos:[{id:"task-a",title:"A task"}],preferences:{view:"day",focus:todayDate}};
 const saveA=await worker.fetch(new Request("https://example.test/api/state",{method:"PUT",headers:{...authHeaders("user-a","a@example.com"),"content-type":"application/json"},body:JSON.stringify(sampleState)}),env,{});assert.equal(saveA.status,200);assert.equal((await saveA.json()).version,1);
+const staleSave=await worker.fetch(new Request("https://example.test/api/state",{method:"PUT",headers:{...authHeaders("user-a","a@example.com"),"content-type":"application/json"},body:JSON.stringify({...sampleState,expectedVersion:0})}),env,{});assert.equal(staleSave.status,409);assert.equal((await staleSave.json()).conflict,true);
 const readA=await worker.fetch(new Request("https://example.test/api/state",{headers:authHeaders("user-a","a@example.com")}),env,{}),stateA=await readA.json();assert.equal(stateA.events[0].id,"private-a");assert.equal(stateA.todos[0].id,"task-a");
 const readB=await worker.fetch(new Request("https://example.test/api/state",{headers:authHeaders("user-b","b@example.com")}),env,{});assert.equal((await readB.json()).exists,false);
 const invalid=await worker.fetch(new Request("https://example.test/api/state",{method:"PUT",headers:{...authHeaders("user-a","a@example.com"),"content-type":"application/json"},body:JSON.stringify({events:{},todos:[],preferences:{}})}),env,{});assert.equal(invalid.status,400);
@@ -149,4 +173,4 @@ const badCanvasHost=await worker.fetch(new Request("https://example.test/api/can
 const bearerState=await worker.fetch(new Request("https://example.test/api/state",{headers:bearerHeaders}),env,{});assert.equal((await bearerState.json()).events[0].id,"private-a");
 const logout=await worker.fetch(new Request("https://example.test/api/auth/logout",{method:"POST",headers:bearerHeaders}),env,{});assert.equal(logout.status,200);
 const revoked=await worker.fetch(new Request("https://example.test/api/account",{headers:bearerHeaders}),env,{});assert.equal(revoked.status,401);
-console.log("26/26 authentication bridge, CORS, account isolation, Canvas feed, sync, live-search, restaurant, and route checks passed");
+console.log("authentication bridge, extension CORS, account isolation, Canvas feed, browser page import, sync, live-search, restaurant, and route checks passed");

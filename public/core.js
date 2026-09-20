@@ -85,7 +85,7 @@
   }
   function canvasBrowserItemToTask(item,existing,nowValue){
     const now=new Date(nowValue||Date.now()),rounded=new Date(now);rounded.setSeconds(0,0);rounded.setMinutes(Math.ceil(rounded.getMinutes()/15)*15);
-    const normalized=normalizeCanvasTitle(item?.title,item?.course||existing?.course),text=`${normalized.title} ${item?.note||''}`,kind=/exam|midterm|final|quiz|test/i.test(text)?'Exam preparation':/project|presentation/i.test(text)?'Project':'Assignment';
+    const normalized=normalizeCanvasTitle(item?.title,item?.course||existing?.course),text=`${normalized.title} ${item?.note||''}`,detectedKind=/exam|midterm|final|quiz|test/i.test(text)?'Exam preparation':/project|presentation/i.test(text)?'Project':'Assignment',kind=['Assignment','Project','Exam preparation','Errand','Personal'].includes(item?.kind)?item.kind:detectedKind;
     const explicit=/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?$/.test(String(item?.deadline||'')),deadline=explicit?String(item.deadline).length===10?`${item.deadline}T23:59`:String(item.deadline):(()=>{const fallback=new Date(rounded);fallback.setDate(fallback.getDate()+7);fallback.setHours(23,59,0,0);return localDateTime(fallback)})();
     const sourceId=String(item?.sourceId||item?.canvasSourceId||`browser:${normalized.title}`).slice(0,220),url=String(item?.url||item?.canvasUrl||existing?.canvasUrl||existing?.url||'');
     const note=String(item?.note||'Imported from the visible Canvas page.')+(explicit?'':' No explicit Canvas date was detected; review this flexible task before scheduling.');

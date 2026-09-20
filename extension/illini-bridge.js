@@ -23,8 +23,12 @@
   if (!isWorker) return;
 
   async function activeCanvasTab() {
-    const tabs = await extensionApi.tabs.query({ url: canvasPatterns });
-    return tabs.find(tab => tab.active) || tabs[0] || null;
+    const tabs = await extensionApi.tabs.query({});
+    const canvasTabs = tabs.filter(tab => {
+      try { const host = new URL(tab.url || '').hostname; return host === 'canvas.illinois.edu' || host.endsWith('.instructure.com'); }
+      catch { return false; }
+    });
+    return canvasTabs.find(tab => tab.active) || canvasTabs[0] || null;
   }
 
   extensionApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -36,7 +40,10 @@
       try { pageResponse = await extensionApi.tabs.sendMessage(tab.id, { type: 'read-canvas-page' }); }
       catch { return { ok: false, error: 'The Canvas reader is not ready. Refresh the Canvas page and try again.' }; }
       if (!pageResponse?.ok) return { ok: false, error: pageResponse?.error || 'Could not read the visible Canvas page.' };
-      const response = await fetch(`${API_BASE}/api/canvas/page-import`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: message.code, page: pageResponse.page }) });
+      const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 12000);
+      let response;
+      try { response = await fetch(`${API_BASE}/api/canvas/page-import`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: message.code, page: pageResponse.page }), signal: controller.signal }); }
+      finally { clearTimeout(timer); }
       let payload = {}; try { payload = await response.json(); } catch {}
       return response.ok ? { ok: true, payload } : { ok: false, error: payload.error || 'Canvas page import failed.' };
     })().then(sendResponse).catch(error => sendResponse({ ok: false, error: error.message || 'Canvas page import failed.' }));

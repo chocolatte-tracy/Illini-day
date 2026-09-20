@@ -1,4 +1,4 @@
-import { readFile, readdir, mkdir, rm, writeFile, access } from "node:fs/promises";
+import { readFile, readdir, mkdir, rm, writeFile, access, cp } from "node:fs/promises";
 import { resolve, extname } from "node:path";
 
 const root = resolve(new URL("..", import.meta.url).pathname);
@@ -22,6 +22,7 @@ for (const name of await readdir(publicDir)) {
 const template = await readFile(resolve(root, "worker/index.js"), "utf8");
 const output = template.replace("/*__ASSET_MAP__*/", JSON.stringify(assets));
 await writeFile(resolve(distDir, "server/index.js"), output);
+await writeFile(resolve(distDir, "server/package.json"), JSON.stringify({ type: "module" }, null, 2));
 // The GitHub Pages site is published directly from public/.  The generated
 // Worker artifact is still used by the live integration tests, but this repo
 // intentionally does not carry a Sites hosting manifest.  Keep the artifact
@@ -35,5 +36,5 @@ try {
   // No Sites manifest is expected for the GitHub Pages deployment.
 }
 await writeFile(resolve(distDir, ".openai/hosting.json"), manifest);
+await cp(resolve(root, "drizzle"), resolve(distDir, ".openai/drizzle"), { recursive: true });
 console.log(`Built ${distDir}`);
-

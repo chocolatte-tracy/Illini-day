@@ -4,7 +4,7 @@ Illini Day is a responsive UIUC calendar, task planner, Canvas calendar importer
 
 ## Deployment
 
-- The static browser app is published from `public/` with GitHub Pages.
+- The canonical live address is [Illini Day on Sites](https://illini-day-planner.xdfvvb7ymf.chatgpt.site/). The static browser app is also mirrored from `public/` with GitHub Pages.
 - The existing server remains responsible for secure sign-in, per-user schedule storage, Canvas feed retrieval, walking estimates, and live searches.
 - GitHub Pages talks only to the allowlisted API origin. Account exchange tokens are random, stored only as hashes on the server, expire after 30 days, and can be revoked by signing out.
 - Canvas browser imports use a five-minute, one-use connection code. The helper sends only sanitized page items to `/api/canvas/page-import`; the user reviews the preview before anything is saved to Canvas Tasks or scheduled.
@@ -35,4 +35,4 @@ node test-live.mjs
 npm run validate
 ```
 
-The production Pages address is intended to be `https://chocolatte-tracy.github.io/Illini-day/`.
+The GitHub Pages mirror is `https://chocolatte-tracy.github.io/Illini-day/`; use the Sites address above for the signed-in production experience and browser-bridge connection.

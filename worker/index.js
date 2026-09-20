@@ -11,8 +11,20 @@ const SOURCES = [
   { name: "Illini Union", url: UNION_CALENDAR, kind: "html" },
 ];
 
+const SECURITY_HEADERS = {
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "strict-origin-when-cross-origin",
+  "permissions-policy": "camera=(), microphone=(), geolocation=()"
+};
+function secureHeaders(headers = {}) { return { ...SECURITY_HEADERS, ...headers }; }
+async function fetchWithTimeout(input, options = {}, timeoutMs = 12000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try { return await fetch(input, { ...options, signal: controller.signal }); }
+  finally { clearTimeout(timer); }
+}
 function json(data, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": status === 200 ? "public, max-age=180" : "no-store" } });
+  return new Response(JSON.stringify(data), { status, headers: secureHeaders({ "content-type": "application/json; charset=utf-8", "cache-control": status === 200 ? "public, max-age=180" : "no-store" }) });
 }
 
 function decodeText(value = "") {
@@ -173,7 +185,7 @@ function rankEvents(events, query, requestedDate) {
 }
 
 async function fetchEventSource(source) {
-  const response = await fetch(source.url, { headers: { "user-agent": "Illini Day campus planner/2.0" }, cf: { cacheTtl: 180 } });
+  const response = await fetchWithTimeout(source.url, { headers: { "user-agent": "Illini Day campus planner/2.0" }, cf: { cacheTtl: 180 } });
   if (!response.ok) throw new Error(`${source.name} returned ${response.status}`);
   const text = await response.text();
   if (source.kind === "ics") return parseIcs(text, source.name);
@@ -187,7 +199,7 @@ function mergeEvents(all) {
 async function verifyEvent(event) {
   if(event.crossSource)return {...event,verified:true,verification:`Time matched across ${event.sources.length} independent official listings.`};
   if(!/^https:\/\/(?:[^/]+\.)?(?:illinois\.edu|one\.illinois\.edu|krannertcenter\.com)\//i.test(event.url||""))return {...event,verified:false,verification:"Open the official page and confirm the time before scheduling."};
-  try{const response=await fetch(event.url,{headers:{"user-agent":"Illini Day campus planner/2.0"},cf:{cacheTtl:180}});if(!response.ok)throw new Error();const html=await response.text(),details=parseJsonLd(html,{name:"Official detail page",url:event.url},event.url)[0];if(!details)return {...event,verified:false,verification:"The official detail page did not expose a machine-readable time. Review it before adding."};const corrected=details.date!==event.date||details.start!==event.start;return {...event,date:details.date,start:details.start,end:details.end||event.end,place:details.place||event.place,verified:true,timeCorrected:corrected,verification:corrected?"Time corrected from the official event detail page and verified again.":"Time matches the official event detail page."};}catch{return {...event,verified:false,verification:"The official detail page could not be rechecked right now. Review it before adding."}}
+  try{const response=await fetchWithTimeout(event.url,{headers:{"user-agent":"Illini Day campus planner/2.0"},cf:{cacheTtl:180}});if(!response.ok)throw new Error();const html=await response.text(),details=parseJsonLd(html,{name:"Official detail page",url:event.url},event.url)[0];if(!details)return {...event,verified:false,verification:"The official detail page did not expose a machine-readable time. Review it before adding."};const corrected=details.date!==event.date||details.start!==event.start;return {...event,date:details.date,start:details.start,end:details.end||event.end,place:details.place||event.place,verified:true,timeCorrected:corrected,verification:corrected?"Time corrected from the official event detail page and verified again.":"Time matches the official event detail page."};}catch{return {...event,verified:false,verification:"The official detail page could not be rechecked right now. Review it before adding."}}
 }
 async function searchEvents(query, date) {
   const settled=await Promise.allSettled(SOURCES.map(fetchEventSource)),successful=settled.flatMap(x=>x.status==="fulfilled"?x.value:[]);
@@ -201,13 +213,13 @@ function cuisineTerms(query){const q=query.toLowerCase(),choices=[['thai',/thai|
 const CUISINE_ALIASES={chinese:['chinese','sichuan','szechuan','cantonese','taiwanese','dim_sum','hot_pot','asian'],sichuan:['sichuan','szechuan'],japanese:['japanese','sushi','ramen'],vegetarian:['vegetarian','vegan'],middle_eastern:['middle_eastern','mediterranean','lebanese','turkish']};
 function restaurantMatches(place,wanted){if(!wanted.length)return true;const text=`${place.title||''} ${place.cuisine||''} ${place.type||''} ${place.place||''}`.toLowerCase().replace(/[;,]/g,' ');return wanted.some(term=>(CUISINE_ALIASES[term.replace(/ /g,'_')]||[term]).some(alias=>text.includes(alias.replace(/_/g,' '))||text.includes(alias)))}
 function restaurantResult(raw,index,center,originName,source){const title=raw.title||raw.name||raw.display_name?.split(',')[0];if(!title)return null;const point=[Number(raw.lat),Number(raw.lon)];if(!point.every(Number.isFinite))return null;const type=raw.type||raw.amenity||'restaurant',cuisine=raw.cuisine||(!/^(restaurant|fast_food|cafe)$/i.test(type)?type:''),place=raw.place||raw.display_name||[raw.address,raw.city,'Illinois'].filter(Boolean).join(', '),distance=distanceKm(center,point),text=`${title} ${type} ${cuisine} ${place}`.toLowerCase();if(/\b(pub|bar|nightclub|casino|adult|biergarten)\b/.test(text))return null;return {id:`place-${raw.id||index}`,kind:'food',type:'Food',title,place,note:`${cuisine?cuisine.replace(/[;_]/g,' '):String(type).replace(/_/g,' ')} · ${distance.toFixed(1)} km from ${originName}. Verify current hours in Google Maps.`,url:`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${title}, ${place}`)}`,source,sources:[source,'Google Maps verification'],lat:String(point[0]),lon:String(point[1]),distanceKm:Number(distance.toFixed(2)),origin:originName,cuisine}}
-async function fetchOverpassRestaurants(center){const query=`[out:json][timeout:15];nwr(around:8000,${center[0]},${center[1]})["amenity"~"^(restaurant|fast_food|cafe)$"];out center tags 120;`,response=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded','user-agent':'Illini Day campus planner/2.1'},body:`data=${encodeURIComponent(query)}`});if(!response.ok)throw new Error(`Restaurant directory returned ${response.status}`);const data=await response.json();return (data.elements||[]).map(element=>{const tags=element.tags||{},lat=element.lat??element.center?.lat,lon=element.lon??element.center?.lon,address=[tags['addr:housenumber'],tags['addr:street']].filter(Boolean).join(' ');return {id:`osm-${element.type}-${element.id}`,title:tags.name||tags['name:en'],lat,lon,type:tags.amenity,cuisine:tags.cuisine||'',address,city:tags['addr:city']||'Champaign-Urbana',place:[address,tags['addr:city']||'Champaign-Urbana','Illinois'].filter(Boolean).join(', ')}}).filter(x=>x.title&&x.lat&&x.lon)}
+async function fetchOverpassRestaurants(center){const query=`[out:json][timeout:15];nwr(around:8000,${center[0]},${center[1]})["amenity"~"^(restaurant|fast_food|cafe)$"];out center tags 120;`,response=await fetchWithTimeout('https://overpass-api.de/api/interpreter',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded','user-agent':'Illini Day campus planner/2.1'},body:`data=${encodeURIComponent(query)}`},16000);if(!response.ok)throw new Error(`Restaurant directory returned ${response.status}`);const data=await response.json();return (data.elements||[]).map(element=>{const tags=element.tags||{},lat=element.lat??element.center?.lat,lon=element.lon??element.center?.lon,address=[tags['addr:housenumber'],tags['addr:street']].filter(Boolean).join(' ');return {id:`osm-${element.type}-${element.id}`,title:tags.name||tags['name:en'],lat,lon,type:tags.amenity,cuisine:tags.cuisine||'',address,city:tags['addr:city']||'Champaign-Urbana',place:[address,tags['addr:city']||'Champaign-Urbana','Illinois'].filter(Boolean).join(', ')}}).filter(x=>x.title&&x.lat&&x.lon)}
 async function searchRestaurants(query,origin) {
   const meaningful = query.replace(/\b(find|show|me|food|restaurant|restaurants|lunch|dinner|eat|near|my|next|class|uiuc|campus)\b/gi, " ").replace(/\s+/g, " ").trim();
   const wanted=cuisineTerms(query),term = wanted.length?`${wanted.join(' ')} restaurant`:meaningful?`${meaningful} restaurant`:"restaurant",originName=origin||'Illini Tower',center=await geocode(originName);
   const url = new URL("https://nominatim.openstreetmap.org/search");
   url.searchParams.set("format", "jsonv2"); url.searchParams.set("q", `${term}, Champaign-Urbana, Illinois`); url.searchParams.set("limit", "50"); url.searchParams.set("addressdetails", "1");url.searchParams.set("extratags","1");url.searchParams.set("countrycodes","us");url.searchParams.set("viewbox",`${center[1]-0.07},${center[0]+0.05},${center[1]+0.07},${center[0]-0.05}`);url.searchParams.set("bounded","1");
-  const settled=await Promise.allSettled([fetch(url,{headers:{"user-agent":"Illini Day campus planner/2.1"},cf:{cacheTtl:600}}).then(async response=>{if(!response.ok)throw new Error(`Map search returned ${response.status}`);return (await response.json()).map(place=>({id:`nominatim-${place.osm_type}-${place.osm_id}`,title:place.name||place.display_name?.split(',')[0],lat:place.lat,lon:place.lon,type:place.type,cuisine:place.extratags?.cuisine||'',place:place.display_name}))}),fetchOverpassRestaurants(center)]),raw=settled.flatMap(item=>item.status==='fulfilled'?item.value:[]);if(!raw.length)throw new Error('Restaurant sources are temporarily unavailable');
+  const settled=await Promise.allSettled([fetchWithTimeout(url,{headers:{"user-agent":"Illini Day campus planner/2.1"},cf:{cacheTtl:600}}).then(async response=>{if(!response.ok)throw new Error(`Map search returned ${response.status}`);return (await response.json()).map(place=>({id:`nominatim-${place.osm_type}-${place.osm_id}`,title:place.name||place.display_name?.split(',')[0],lat:place.lat,lon:place.lon,type:place.type,cuisine:place.extratags?.cuisine||'',place:place.display_name}))}),fetchOverpassRestaurants(center)]),raw=settled.flatMap(item=>item.status==='fulfilled'?item.value:[]);if(!raw.length)throw new Error('Restaurant sources are temporarily unavailable');
   const seen=new Set(),results=raw.map((place,index)=>restaurantResult(place,index,center,originName,place.id?.startsWith('osm-')?'OpenStreetMap restaurant directory':'OpenStreetMap live search')).filter(Boolean).filter(place=>restaurantMatches(place,wanted)).filter(place=>{const key=place.title.toLowerCase().replace(/\W+/g,' ').trim();if(seen.has(key))return false;seen.add(key);return true}).sort((a,b)=>a.distanceKm-b.distanceKm).slice(0,12);
   const googleSearch=`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${meaningful||'restaurant'} near ${originName}, UIUC`)}`;
   return {mode:'food',results,origin:originName,filters:{cuisine:wanted,excluded:['pub','bar','nightclub','casino','adult-only venue'],sortedBy:'distance'},source:'OpenStreetMap live place data',sourceUrl:'https://www.openstreetmap.org/',sources:[{name:'OpenStreetMap name search',url:'https://nominatim.openstreetmap.org/'},{name:'OpenStreetMap restaurant directory',url:'https://overpass-api.de/'},{name:'Verify or explore more in Google Maps',url:googleSearch}],fetchedAt:new Date().toISOString()};
@@ -225,11 +237,11 @@ async function handleSearch(url) {
 
 const CAMPUS_POINTS={"illini tower":[40.10755,-88.23084],"siebel center for computer science":[40.11379,-88.22491],"siebel center":[40.11379,-88.22491],"lincoln hall":[40.10676,-88.22821],"campus instructional facility":[40.11055,-88.22684],"cif":[40.11055,-88.22684],"main library":[40.10454,-88.22834],"illini union":[40.10925,-88.22723],"arc":[40.10177,-88.23605],"krannert center":[40.10836,-88.22231],"gregory hall":[40.1059,-88.22712],"grainger engineering library":[40.11263,-88.22603],"engineering library":[40.11263,-88.22603]};
 function routeLink(from,to){return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(from+", UIUC")}&destination=${encodeURIComponent(to+", UIUC")}&travelmode=walking`}
-async function geocode(place){const n=place.toLowerCase().trim(),known=CAMPUS_POINTS[n]||Object.entries(CAMPUS_POINTS).find(([k])=>n.includes(k)||k.includes(n))?.[1];if(known)return known;const u=new URL("https://nominatim.openstreetmap.org/search");u.searchParams.set("format","jsonv2");u.searchParams.set("q",`${place}, University of Illinois Urbana Champaign`);u.searchParams.set("limit","1");const r=await fetch(u,{headers:{"user-agent":"Illini Day campus planner/2.0"},cf:{cacheTtl:86400}});if(!r.ok)throw new Error("Place lookup failed");const rows=await r.json();if(!rows[0])throw new Error("Place not found");return [Number(rows[0].lat),Number(rows[0].lon)]}
-async function handleWalk(url){const from=(url.searchParams.get("from")||"").slice(0,160),to=(url.searchParams.get("to")||"").slice(0,160);if(!from||!to)return json({error:"Both places are required"},400);if(from.toLowerCase()===to.toLowerCase())return json({minutes:0,distanceKm:0,method:"Same place",googleUrl:routeLink(from,to)});try{const [a,b]=await Promise.all([geocode(from),geocode(to)]),payload={locations:[{lat:a[0],lon:a[1]},{lat:b[0],lon:b[1]}],costing:"pedestrian",units:"kilometers"},r=await fetch(`https://valhalla1.openstreetmap.de/route?json=${encodeURIComponent(JSON.stringify(payload))}`,{headers:{"user-agent":"Illini Day campus planner/2.0"},cf:{cacheTtl:3600}});if(!r.ok)throw new Error("Route service failed");const data=await r.json(),summary=data.trip?.summary;if(!summary)throw new Error("No pedestrian route");return json({minutes:Math.max(1,Math.ceil(summary.time/60)),distanceKm:Number(summary.length.toFixed(2)),method:"Pedestrian route estimate",googleUrl:routeLink(from,to)});}catch{try{const [a,b]=await Promise.all([geocode(from),geocode(to)]),lat=(a[0]+b[0])/2*Math.PI/180,dy=(a[0]-b[0])*111.32,dx=(a[1]-b[1])*111.32*Math.cos(lat),km=Math.sqrt(dx*dx+dy*dy)*1.22;return json({minutes:Math.max(3,Math.ceil(km/0.075)+2),distanceKm:Number(km.toFixed(2)),method:"Campus distance estimate",googleUrl:routeLink(from,to)});}catch{return json({error:"Could not estimate this route",googleUrl:routeLink(from,to)},502)}}}
+async function geocode(place){const n=place.toLowerCase().trim(),known=CAMPUS_POINTS[n]||Object.entries(CAMPUS_POINTS).find(([k])=>n.includes(k)||k.includes(n))?.[1];if(known)return known;const u=new URL("https://nominatim.openstreetmap.org/search");u.searchParams.set("format","jsonv2");u.searchParams.set("q",`${place}, University of Illinois Urbana Champaign`);u.searchParams.set("limit","1");const r=await fetchWithTimeout(u,{headers:{"user-agent":"Illini Day campus planner/2.0"},cf:{cacheTtl:86400}});if(!r.ok)throw new Error("Place lookup failed");const rows=await r.json();if(!rows[0])throw new Error("Place not found");return [Number(rows[0].lat),Number(rows[0].lon)]}
+async function handleWalk(url){const from=(url.searchParams.get("from")||"").slice(0,160),to=(url.searchParams.get("to")||"").slice(0,160);if(!from||!to)return json({error:"Both places are required"},400);if(from.toLowerCase()===to.toLowerCase())return json({minutes:0,distanceKm:0,method:"Same place",googleUrl:routeLink(from,to)});try{const [a,b]=await Promise.all([geocode(from),geocode(to)]),payload={locations:[{lat:a[0],lon:a[1]},{lat:b[0],lon:b[1]}],costing:"pedestrian",units:"kilometers"},r=await fetchWithTimeout(`https://valhalla1.openstreetmap.de/route?json=${encodeURIComponent(JSON.stringify(payload))}`,{headers:{"user-agent":"Illini Day campus planner/2.0"},cf:{cacheTtl:3600}});if(!r.ok)throw new Error("Route service failed");const data=await r.json(),summary=data.trip?.summary;if(!summary)throw new Error("No pedestrian route");return json({minutes:Math.max(1,Math.ceil(summary.time/60)),distanceKm:Number(summary.length.toFixed(2)),method:"Pedestrian route estimate",googleUrl:routeLink(from,to)});}catch{try{const [a,b]=await Promise.all([geocode(from),geocode(to)]),lat=(a[0]+b[0])/2*Math.PI/180,dy=(a[0]-b[0])*111.32,dx=(a[1]-b[1])*111.32*Math.cos(lat),km=Math.sqrt(dx*dx+dy*dy)*1.22;return json({minutes:Math.max(3,Math.ceil(km/0.075)+2),distanceKm:Number(km.toFixed(2)),method:"Campus distance estimate",googleUrl:routeLink(from,to)});}catch{return json({error:"Could not estimate this route",googleUrl:routeLink(from,to)},502)}}}
 
-const GITHUB_PAGES_ORIGIN="https://chocolatte-tracy.github.io",SESSION_LIFETIME_MS=30*24*60*60*1000;
-function privateJson(data,status=200){return new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"private, no-store"}})}
+const GITHUB_PAGES_ORIGIN="https://chocolatte-tracy.github.io",SESSION_LIFETIME_MS=30*24*60*60*1000,CANVAS_BRIDGE_LIFETIME_MS=5*60*1000,MAX_CANVAS_PAGE_BYTES=300000,MAX_CANVAS_PAGE_ITEMS=200;
+function privateJson(data,status=200){return new Response(JSON.stringify(data),{status,headers:secureHeaders({"content-type":"application/json; charset=utf-8","cache-control":"private, no-store"})})}
 function injectedAccount(request){const userId=request.headers.get("oai-authenticated-user-id"),email=request.headers.get("oai-authenticated-user-email");return userId&&email?{id:userId,email}:null}
 function bearerToken(request){const match=(request.headers.get("authorization")||"").match(/^Bearer\s+([A-Za-z0-9_-]{32,})$/i);return match?.[1]||null}
 async function tokenHash(token){const bytes=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(token));return [...new Uint8Array(bytes)].map(value=>value.toString(16).padStart(2,"0")).join("")}
@@ -253,6 +265,10 @@ async function handleState(request,env){
   const length=Number(request.headers.get("content-length")||0);if(length>2_000_000)return privateJson({error:"Schedule data is too large."},413);
   let body;try{body=await request.json()}catch{return privateJson({error:"Invalid JSON body."},400)}
   if(!Array.isArray(body.events)||!Array.isArray(body.todos)||!body.preferences||typeof body.preferences!=="object"||Array.isArray(body.preferences))return privateJson({error:"Events, tasks, or preferences have an invalid format."},400);
+  const expectedVersion=body.expectedVersion===undefined||body.expectedVersion===null?null:Number(body.expectedVersion);
+  if(expectedVersion!==null&&!Number.isInteger(expectedVersion))return privateJson({error:"Invalid schedule version."},400);
+  const current=await env.DB.prepare("SELECT version FROM user_state WHERE user_id = ? LIMIT 1").bind(auth.account.id).first(),currentVersion=Number(current?.version)||0;
+  if(expectedVersion!==null&&expectedVersion!==currentVersion)return privateJson({error:"Your schedule changed on another device.",conflict:true,version:currentVersion},409);
   const eventsJson=JSON.stringify(body.events),todosJson=JSON.stringify(body.todos),preferencesJson=JSON.stringify(body.preferences);
   if(eventsJson.length+todosJson.length+preferencesJson.length>1_900_000)return privateJson({error:"Schedule data is too large."},413);
   await env.DB.prepare(`INSERT INTO user_state (user_id,email,events_json,todos_json,preferences_json,version,updated_at)
@@ -266,7 +282,7 @@ function canvasDate(value){if(!value)return null;const d=new Date(value);return 
 function canvasKind(text=""){return /exam|midterm|final|quiz|test/i.test(text)?"Exam prep":/project|presentation/i.test(text)?"Project":"Assignment"}
 function canvasSummary(html=""){return stripHtml(String(html)).slice(0,600)}
 function findCanvasDate(text=""){const m=text.match(/(?:due|deadline|exam|test|quiz|presentation|submit(?:ted)?\s+by)\s*(?:on|:)?\s*((?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}(?:,\s*\d{4})?(?:\s+(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm))?)/i);if(!m)return null;const year=new Date().getFullYear(),raw=/\d{4}/.test(m[1])?m[1]:`${m[1]}, ${year}`,d=new Date(raw);return Number.isNaN(d.getTime())?null:d.toISOString().slice(0,16)}
-async function canvasGet(base,path,token){const response=await fetch(`${base}${path}`,{headers:{authorization:`Bearer ${token}`,accept:"application/json"}});if(!response.ok)throw new Error(response.status===401?"Canvas rejected this token.":`Canvas returned ${response.status}.`);return response.json()}
+async function canvasGet(base,path,token){const response=await fetchWithTimeout(`${base}${path}`,{headers:{authorization:`Bearer ${token}`,accept:"application/json"}},15000);if(!response.ok)throw new Error(response.status===401?"Canvas rejected this token.":`Canvas returned ${response.status}.`);return response.json()}
 async function handleCanvasSync(request,env){
   const auth=await requireAccount(request,env);if(auth.response)return auth.response;
   let body;try{body=await request.json()}catch{return privateJson({error:"Invalid request."},400)}
@@ -302,17 +318,56 @@ async function handleCanvasFeedSync(request,env){
   }catch(error){return privateJson({error:String(error?.name==="AbortError"?"Canvas feed request timed out.":error?.message||"Canvas calendar feed could not be read.")},502)}
 }
 
+function isCanvasHost(host=""){const value=String(host).toLowerCase();return value==="canvas.illinois.edu"||value.endsWith(".instructure.com")}
+function bridgeText(value,max=600){return stripHtml(String(value||"")).slice(0,max).trim()}
+function bridgeUrl(value){try{const parsed=new URL(String(value||""));return parsed.protocol==="https:"&&isCanvasHost(parsed.hostname)?parsed.href.slice(0,2000):null}catch{return null}}
+function bridgeDeadline(value){const raw=String(value||"").trim();return /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?$/.test(raw)?raw:null}
+function bridgeSourceId(item,index){const raw=String(item?.sourceId||item?.canvasSourceId||`${item?.canvasArea||item?.area||"Canvas"}:${item?.course||""}:${item?.module||""}:${item?.title||index}`);return raw.replace(/[^a-z0-9:_-]+/gi,"-").slice(0,220)||`browser:${index}`}
+function normalizeCanvasPage(page){
+  if(!page||typeof page!=="object"||Array.isArray(page))return {error:"Canvas page data has an invalid format."};
+  const pageUrl=bridgeUrl(page.url);if(!pageUrl)return {error:"The browser helper must be used on an official Canvas page."};
+  const parsed=new URL(pageUrl),area=String(page.area||page.canvasArea||"").toLowerCase().startsWith("announce")?"Announcement":"Module",rawItems=Array.isArray(page.items)?page.items:[];
+  if(rawItems.length>MAX_CANVAS_PAGE_ITEMS)return {error:`Select a page with no more than ${MAX_CANVAS_PAGE_ITEMS} items.`};
+  const items=[];for(let index=0;index<rawItems.length;index++){
+    const item=rawItems[index],title=bridgeText(item?.title,240);if(!title)continue;
+    const url=bridgeUrl(item?.url)||pageUrl,deadline=bridgeDeadline(item?.deadline),itemArea=String(item?.area||item?.canvasArea||area).toLowerCase().startsWith("announce")?"Announcement":"Module";
+    items.push({sourceId:bridgeSourceId({...item,canvasArea:itemArea},index),title,course:bridgeText(item?.course||page.course,160),module:bridgeText(item?.module||page.module,160),deadline,kind:bridgeText(item?.kind||"Assignment",40),note:bridgeText(item?.note,1400),url,canvasArea:itemArea,suggested:item?.suggested!==false,canvasImportSource:"browser"});
+  }
+  if(!items.length)return {error:"No readable Canvas items were found on this page."};
+  return {page:{url:pageUrl,title:bridgeText(page.title||parsed.pathname,240),area,course:bridgeText(page.course,160),module:bridgeText(page.module,160)},items};
+}
+async function handleCanvasBridgeStart(request,env){
+  const auth=await requireAccount(request,env);if(auth.response)return auth.response;
+  if(!env?.DB)return privateJson({error:"Canvas browser bridge storage is temporarily unavailable."},503);
+  await env.DB.prepare("DELETE FROM canvas_bridge WHERE expires_at <= ?").bind(Date.now()).run();
+  const code=newSessionToken(),codeHash=await tokenHash(code),expiresAt=Date.now()+CANVAS_BRIDGE_LIFETIME_MS;
+  await env.DB.prepare("INSERT INTO canvas_bridge (code_hash,user_id,email,expires_at,created_at) VALUES (?,?,?,?,CURRENT_TIMESTAMP)").bind(codeHash,auth.account.id,auth.account.email,expiresAt).run();
+  return privateJson({code,expiresAt});
+}
+async function handleCanvasPageImport(request,env){
+  if(!env?.DB)return privateJson({error:"Canvas browser bridge storage is temporarily unavailable."},503);
+  const length=Number(request.headers.get("content-length")||0);if(length>MAX_CANVAS_PAGE_BYTES)return privateJson({error:"The Canvas page payload is too large."},413);
+  let body;try{body=await request.json()}catch{return privateJson({error:"Invalid Canvas page payload."},400)}
+  const code=String(body?.code||"").trim();if(!/^[A-Za-z0-9_-]{32,100}$/.test(code))return privateJson({error:"The Canvas connection code is invalid or expired."},401);
+  const normalized=normalizeCanvasPage(body?.page);if(normalized.error)return privateJson({error:normalized.error},400);
+  if(JSON.stringify(body).length>MAX_CANVAS_PAGE_BYTES)return privateJson({error:"The Canvas page payload is too large."},413);
+  const codeHash=await tokenHash(code),row=await env.DB.prepare("SELECT code_hash,user_id,email,expires_at FROM canvas_bridge WHERE code_hash = ? AND expires_at > ? LIMIT 1").bind(codeHash,Date.now()).first();
+  if(!row)return privateJson({error:"The Canvas connection code is invalid or expired."},401);
+  await env.DB.prepare("DELETE FROM canvas_bridge WHERE code_hash = ?").bind(codeHash).run();
+  return privateJson({source:"Canvas browser page",host:new URL(normalized.page.url).hostname,page:normalized.page,items:normalized.items,syncedAt:new Date().toISOString()});
+}
+
 function assetResponse(pathname) {
   const asset = ASSETS[pathname === "/index.html" ? "/" : pathname];
   if (!asset) return null;
   const binary = atob(asset.body); const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new Response(bytes, { headers: { "content-type": asset.type, "cache-control": "no-cache, no-store, must-revalidate", "pragma": "no-cache", "expires": "0" } });
+  return new Response(bytes, { headers: secureHeaders({ "content-type": asset.type, "cache-control": "no-cache, no-store, must-revalidate", "pragma": "no-cache", "expires": "0", "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://illini-day-planner.xdfvvb7ymf.chatgpt.site; img-src 'self' data:; base-uri 'self'; frame-ancestors 'none'; form-action 'self'" }) });
 }
 
-function corsOrigin(request){const origin=request.headers.get("origin");return origin===GITHUB_PAGES_ORIGIN?origin:null}
+function corsOrigin(request){const origin=request.headers.get("origin");if(origin===GITHUB_PAGES_ORIGIN)return origin;try{if(origin&&new URL(origin).protocol==="chrome-extension:")return origin}catch{}return null}
 function withCors(response,request){const origin=corsOrigin(request);if(!origin)return response;const headers=new Headers(response.headers),vary=headers.get("vary");headers.set("access-control-allow-origin",origin);headers.set("access-control-allow-headers","authorization, content-type");headers.set("access-control-allow-methods","GET, PUT, POST, OPTIONS");headers.set("vary",vary?`${vary}, Origin`:"Origin");return new Response(response.body,{status:response.status,statusText:response.statusText,headers})}
-function corsPreflight(request){return corsOrigin(request)?new Response(null,{status:204,headers:{"access-control-allow-origin":GITHUB_PAGES_ORIGIN,"access-control-allow-headers":"authorization, content-type","access-control-allow-methods":"GET, PUT, POST, OPTIONS","access-control-max-age":"86400","vary":"Origin"}}):new Response(null,{status:403})}
+function corsPreflight(request){const origin=corsOrigin(request);return origin?new Response(null,{status:204,headers:{"access-control-allow-origin":origin,"access-control-allow-headers":"authorization, content-type","access-control-allow-methods":"GET, PUT, POST, OPTIONS","access-control-max-age":"86400","vary":"Origin"}}):new Response(null,{status:403})}
 
 export default {
   async fetch(request, env, ctx) {
@@ -324,6 +379,8 @@ export default {
     else if (request.method === "POST" && url.pathname === "/api/auth/logout") response=await handleAuthLogout(request,env);
     else if (request.method === "GET" && url.pathname === "/api/account") response=await handleAccount(request,env);
     else if ((request.method === "GET" || request.method === "PUT") && url.pathname === "/api/state") { try { response=await handleState(request,env); } catch (error) { response=privateJson({error:"Could not access your schedule right now.",detail:String(error?.message||error)},503); } }
+    else if (request.method === "POST" && url.pathname === "/api/canvas/bridge/start") response=await handleCanvasBridgeStart(request,env);
+    else if (request.method === "POST" && url.pathname === "/api/canvas/page-import") response=await handleCanvasPageImport(request,env);
     else if (request.method === "POST" && url.pathname === "/api/canvas/sync") response=await handleCanvasSync(request,env);
     else if (request.method === "POST" && url.pathname === "/api/canvas/feed") response=await handleCanvasFeedSync(request,env);
     else if (request.method === "GET" && url.pathname === "/api/search") response=await handleSearch(url);
