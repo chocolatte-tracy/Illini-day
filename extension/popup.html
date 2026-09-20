@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Illini Day Canvas Reader</title>
+  <style>
+    :root{color-scheme:light;font:14px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#13294b;background:#f7f9fc}body{width:300px;margin:0;padding:18px}h1{font-size:18px;margin:0 0 4px}p{color:#5e6c7d;font-size:12px;margin:8px 0 14px}button{width:100%;border:0;border-radius:9px;padding:10px 12px;background:#ff5f05;color:#fff;font-weight:750;cursor:pointer}button:disabled{opacity:.6;cursor:wait}.status{margin-top:12px;padding:10px;border-radius:9px;background:#fff;border:1px solid #dce4ef;color:#516176;font-size:12px}.status.error{border-color:#edc5c5;background:#fff7f7;color:#9c3939}.fine{font-size:10px;color:#78879a;margin-top:12px}
+  </style>
+</head>
+<body>
+  <h1>Illini Day Canvas Reader</h1>
+  <p>在 Canvas 的 Modules 或 Announcements 页面打开此插件。它只读取当前页面可见内容，不读取密码、Cookie 或 PAT。</p>
+  <button id="readCanvasBtn" type="button">Read current Canvas page</button>
+  <div class="status" id="status">Ready</div>
+  <div class="fine">回到 Illini Day 的 Canvas 面板，点击 “Read current Canvas page” 完成导入。</div>
+  <script src="popup.js"></script>
+</body>
+</html>

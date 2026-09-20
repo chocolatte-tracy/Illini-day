@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Illini Day Canvas Reader",
+  "version": "0.1.0",
+  "description": "Read the visible Canvas Modules or Announcements page and send a review preview to Illini Day.",
+  "permissions": ["activeTab", "tabs"],
+  "host_permissions": [
+    "https://canvas.illinois.edu/*",
+    "https://*.instructure.com/*",
+    "https://illini-day-planner.xdfvvb7ymf.chatgpt.site/*"
+  ],
+  "action": {
+    "default_title": "Illini Day Canvas Reader",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "illini-bridge.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://canvas.illinois.edu/*",
+        "https://*.instructure.com/*"
+      ],
+      "js": ["canvas-content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://chocolatte-tracy.github.io/Illini-day/*"],
+      "js": ["illini-bridge.js"],
+      "run_at": "document_start"
+    }
+  ]
+}
