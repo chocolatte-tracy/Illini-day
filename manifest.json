@@ -7,14 +7,15 @@
   "host_permissions": [
     "https://canvas.illinois.edu/*",
     "https://*.instructure.com/*",
-    "https://illini-day-planner.xdfvvb7ymf.chatgpt.site/*"
+    "https://illini-day-planner.xdfvvb7ymf.chatgpt.site/*",
+    "https://chocolatte-tracy.github.io/Illini-day/*"
   ],
   "action": {
     "default_title": "Illini Day Canvas Reader",
-    "default_popup": "popup.html"
+    "default_popup": "extension/popup.html"
   },
   "background": {
-    "service_worker": "illini-bridge.js"
+    "service_worker": "extension/illini-bridge.js"
   },
   "content_scripts": [
     {
@@ -22,7 +23,7 @@
         "https://canvas.illinois.edu/*",
         "https://*.instructure.com/*"
       ],
-      "js": ["canvas-content.js"],
+      "js": ["extension/canvas-content.js"],
       "run_at": "document_idle"
     },
     {
@@ -30,7 +31,7 @@
         "https://chocolatte-tracy.github.io/Illini-day/*",
         "https://illini-day-planner.xdfvvb7ymf.chatgpt.site/*"
       ],
-      "js": ["illini-bridge.js"],
+      "js": ["extension/illini-bridge.js"],
       "run_at": "document_start"
     }
   ]

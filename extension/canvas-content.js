@@ -1,4 +1,5 @@
 (() => {
+  const extensionApi = globalThis.browser || globalThis.chrome;
   const clean = value => String(value || '').replace(/\s+/g, ' ').trim();
   const MONTHS = new Map(['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'].map((name, index) => [name, index]));
   const isCanvasHost = host => host === 'canvas.illinois.edu' || host.endsWith('.instructure.com');
@@ -78,7 +79,7 @@
     return { url: location.href, title: pageTitle(), area, course, module: fallbackModule, items: unique };
   }
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  extensionApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type !== 'read-canvas-page') return;
     try { sendResponse({ ok: true, page: extractCanvasPage() }); }
     catch (error) { sendResponse({ ok: false, error: error.message || 'Could not read this Canvas page.' }); }
